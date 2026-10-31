@@ -1,0 +1,684 @@
+
+  {
+    "id": "salute_tab",
+    "type": "tab",
+    "label": "SALUTE -> ATAK",
+    "disabled": false,
+    "env": [
+      {
+        "name": "TAK_API",
+        "value": "https://127.0.0.1:8443",
+        "type": "str"
+      },
+      {
+        "name": "DEFAULT_MISSION",
+        "value": "",
+        "type": "str"
+      },
+      {
+        "name": "CREATOR_UID",
+        "value": "SALUTE-NODERED",
+        "type": "str"
+      },
+      {
+        "name": "MAP_CENTER",
+        "value": "39.5,-98.35",
+        "type": "str"
+      },
+      {
+        "name": "MAP_ZOOM",
+        "value": "4",
+        "type": "str"
+      },
+      {
+        "name": "TILE_URL",
+        "value": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "type": "str"
+      },
+      {
+        "name": "TILE_ATTRIBUTION",
+        "value": "&copy; OpenStreetMap contributors",
+        "type": "str"
+      }
+    ],
+    "info": "Receives SALUTE reports (web form or JSON POST) and pushes them to TAK Server as CoT events."
+  },
+  {
+    "id": "c1",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "1) Web form: open http://<nodered>:1880/salute",
+    "info": "",
+    "x": 230,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "h_get",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 110,
+    "y": 90,
+    "wires": [
+      [
+        "tpl_form"
+      ]
+    ]
+  },
+  {
+    "id": "tpl_form",
+    "type": "template",
+    "z": "salute_tab",
+    "name": "SALUTE form",
+    "field": "payload",
+    "fieldType": "msg",
+    "format": "html",
+    "syntax": "plain",
+    "template": "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>SALUTE Report</title>\n<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css\">\n<script src=\"https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js\"></script>\n<style>\nbody{font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#1b1f1a;color:#e6eadf}\nh1{font-size:1.3rem;letter-spacing:.08em}\nlabel,.lbl{display:block;margin-top:12px;font-weight:600}\nlabel span,.lbl span{color:#9fb38a;font-weight:400;font-size:.85rem}\ninput,select,textarea{width:100%;box-sizing:border-box;padding:10px;margin-top:4px;background:#2a3027;color:#e6eadf;border:1px solid #4b5a44;border-radius:6px;font-size:1rem}\n.row{display:flex;gap:8px;align-items:flex-end}.row>div{flex:1}\nbutton{margin-top:16px;padding:12px 16px;border:0;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer}\n#send{background:#6a8f4e;color:#fff;width:100%}#gps,#mrefresh{background:#3b4636;color:#e6eadf;margin-top:8px}\n#mrefresh{margin-top:0;padding:10px 12px;font-weight:600}\n#map{height:280px;margin-top:6px;border-radius:6px;border:1px solid #4b5a44;background:#2a3027}\n.note{font-size:.8rem;color:#9fb38a;margin-top:4px}\n#out{margin-top:14px;padding:10px;border-radius:6px;white-space:pre-wrap;display:none}\n.ok{background:#27401f}.err{background:#4a2020}\n</style></head><body>\n<h1>S.A.L.U.T.E. REPORT</h1>\n<form id=\"f\">\n<label>Reporter callsign<input name=\"callsign\" required></label>\n<label>S - Size <span>(count / how many)</span><input name=\"size\" required placeholder=\"e.g. 5 personnel, 2 vehicles\"></label>\n<label>A - Activity <span>(what are they doing)</span><textarea name=\"activity\" rows=\"2\" required></textarea></label>\n\n<div class=\"lbl\">L - Location <span>(tap the map or drag the pin)</span></div>\n<div id=\"map\"></div>\n<div class=\"note\" id=\"mapnote\"></div>\n<div class=\"row\"><div><input name=\"lat\" type=\"number\" step=\"any\" placeholder=\"Latitude\" required></div>\n<div><input name=\"lon\" type=\"number\" step=\"any\" placeholder=\"Longitude\" required></div></div>\n<button type=\"button\" id=\"gps\">Use my GPS position</button>\n\n<label>U - Unit <span>(uniform / markings / ID)</span><input name=\"unit\" required></label>\n<label>T - Time <span>(observed; blank = now)</span><input name=\"time\" type=\"datetime-local\"></label>\n<label>E - Equipment <span>(weapons, vehicles, gear)</span><textarea name=\"equipment\" rows=\"2\" required></textarea></label>\n<label>H - Habits <span>(routines, patterns, timings)</span><textarea name=\"habits\" rows=\"2\"></textarea></label>\n<label>I - Intentions <span>(what they appear to be planning)</span><textarea name=\"intentions\" rows=\"2\"></textarea></label>\n<label>M - Morale <span>(demeanor, discipline, condition)</span><input name=\"morale\"></label>\n<label>Affiliation<select name=\"affiliation\">\n<option value=\"a-u-G\">Unknown</option><option value=\"a-h-G\">Hostile</option>\n<option value=\"a-s-G\">Suspect</option><option value=\"a-n-G\">Neutral</option><option value=\"a-f-G\">Friendly</option></select></label>\n\n<div class=\"lbl\">ATAK mission <span>(from TAK Server)</span></div>\n<div class=\"row\"><div><select id=\"missionSel\"><option value=\"\">Loading...</option></select></div>\n<button type=\"button\" id=\"mrefresh\">Refresh</button></div>\n<input id=\"missionOther\" placeholder=\"Mission name\" style=\"display:none\">\n<div class=\"note\" id=\"missionNote\"></div>\n\n<label style=\"display:flex;gap:8px;align-items:center\"><input type=\"checkbox\" name=\"package\" checked style=\"width:auto;margin:0\"> Build ATAK data package</label>\n<label>Keep on map for (minutes)<input name=\"staleMinutes\" type=\"number\" value=\"60\" min=\"1\"></label>\n<button id=\"send\" type=\"submit\">Send to ATAK</button>\n</form>\n<div id=\"out\"></div>\n<script>\nconst f=document.getElementById(\"f\"),out=document.getElementById(\"out\");\nconst $=id=>document.getElementById(id);\n\nasync function getJSON(url,ms){\n const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||8000);\n try{const r=await fetch(url,{signal:c.signal});return await r.json();}finally{clearTimeout(t);}\n}\n\n/* ---------- mission dropdown ---------- */\nfunction toggleOther(){$(\"missionOther\").style.display=$(\"missionSel\").value===\"__other__\"?\"block\":\"none\";}\nasync function loadMissions(refresh){\n const sel=$(\"missionSel\"),note=$(\"missionNote\");\n note.textContent=\"Loading missions...\";\n let names=[];\n try{\n  const j=await getJSON(\"salute/missions\"+(refresh?\"?refresh=1\":\"\"));\n  names=j.missions||[];\n  note.textContent=j.ok?(names.length+\" mission(s) available\"):(\"Mission list unavailable\"+(j.error?\": \"+j.error:\"\"));\n }catch(e){note.textContent=\"Mission list unavailable (timed out)\";}\n const keep=sel.value;\n sel.innerHTML=\"\";\n const add=(v,t)=>{const o=document.createElement(\"option\");o.value=v;o.textContent=t;sel.appendChild(o);};\n add(\"\",\"Server default\");\n names.forEach(n=>add(n,n));\n add(\"__other__\",\"Other (type a name)...\");\n if(Array.prototype.some.call(sel.options,o=>o.value===keep))sel.value=keep;\n toggleOther();\n}\n$(\"missionSel\").onchange=toggleOther;\n$(\"mrefresh\").onclick=()=>loadMissions(true);\n\n/* ---------- map picker ---------- */\nlet map=null,pin=null,pinIcon=null;\nfunction setPoint(lat,lon,pan){\n f.lat.value=(+lat).toFixed(6);f.lon.value=(+lon).toFixed(6);\n if(!map)return;\n const ll=[+lat,+lon];\n if(!pin){\n  pin=L.marker(ll,{draggable:true,icon:pinIcon}).addTo(map);\n  pin.on(\"dragend\",()=>{const p=pin.getLatLng();setPoint(p.lat,p.lng,false);});\n }else pin.setLatLng(ll);\n if(pan)map.setView(ll,Math.max(map.getZoom(),15));\n}\nasync function initMap(){\n const note=$(\"mapnote\");\n if(typeof L===\"undefined\"){\n  note.textContent=\"Map library not reachable (offline?). Enter coordinates manually.\";\n  $(\"map\").style.display=\"none\";return;\n }\n let cfg={tileUrl:\"https://tile.openstreetmap.org/{z}/{x}/{y}.png\",attribution:\"&copy; OpenStreetMap contributors\",lat:39.5,lon:-98.35,zoom:4};\n try{Object.assign(cfg,await getJSON(\"salute/config\",5000));}catch(e){}\n pinIcon=L.divIcon({className:\"\",iconSize:[24,24],iconAnchor:[12,12],\n  html:'<div style=\"width:24px;height:24px;border-radius:50%;background:#d9534f;border:3px solid #fff;box-sizing:border-box\"></div>'});\n map=L.map(\"map\").setView([cfg.lat,cfg.lon],cfg.zoom);\n L.tileLayer(cfg.tileUrl,{attribution:cfg.attribution,maxZoom:19}).addTo(map);\n map.on(\"click\",e=>setPoint(e.latlng.lat,e.latlng.lng,false));\n [\"lat\",\"lon\"].forEach(n=>f[n].addEventListener(\"change\",()=>{\n  const a=parseFloat(f.lat.value),b=parseFloat(f.lon.value);\n  if(a>=-90&&a<=90&&b>=-180&&b<=180)setPoint(a,b,true);}));\n note.textContent=\"Map tiles need a connection to the tile server.\";\n}\n$(\"gps\").onclick=()=>navigator.geolocation.getCurrentPosition(\n p=>setPoint(p.coords.latitude,p.coords.longitude,true),\n e=>alert(\"GPS error: \"+e.message),{enableHighAccuracy:true});\n\n/* ---------- submit ---------- */\nf.onsubmit=async e=>{e.preventDefault();\n const d=Object.fromEntries(new FormData(f).entries());\n if(d.time)d.time=new Date(d.time).toISOString();\n const sv=$(\"missionSel\").value;\n d.mission=sv===\"__other__\"?$(\"missionOther\").value.trim():sv;\n try{const r=await fetch(\"salute\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify(d)});\n const j=await r.json();out.style.display=\"block\";out.className=r.ok?\"ok\":\"err\";\n out.textContent=r.ok?\"Sent. UID: \"+j.uid:\"Error: \"+(j.errors||[j.error]).join(\"; \");\n if(r.ok&&j.packageUrl){out.append(document.createElement(\"br\"));const a=document.createElement(\"a\");a.href=j.packageUrl;a.style.color=\"#bfe3a0\";a.textContent=\"Download data package\";out.append(a);}\n if(r.ok&&j.mission){out.append(document.createElement(\"br\"));out.append(\"Mission: \"+j.mission);}}\n catch(x){out.style.display=\"block\";out.className=\"err\";out.textContent=\"Network error: \"+x.message;}};\n\ninitMap();\nloadMissions(false);\n</script></body></html>",
+    "output": "str",
+    "x": 290,
+    "y": 90,
+    "wires": [
+      [
+        "h_get_resp"
+      ]
+    ]
+  },
+  {
+    "id": "h_get_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "200",
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8"
+    },
+    "x": 470,
+    "y": 90,
+    "wires": []
+  },
+  {
+    "id": "c2",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "2) Submit: POST JSON to /salute -> CoT -> TAK Server",
+    "info": "",
+    "x": 250,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "h_post",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute",
+    "method": "post",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 110,
+    "y": 210,
+    "wires": [
+      [
+        "fn_build"
+      ]
+    ]
+  },
+  {
+    "id": "fn_build",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "SALUTE -> CoT",
+    "func": "// SALUTE -> CoT converter\nconst d = (msg.req && msg.req.body && Object.keys(msg.req.body).length) ? msg.req.body : msg.payload;\nconst respond = (code, body) => msg.res ? { res: msg.res, _msgid: msg._msgid, statusCode: code, payload: body } : null;\n\n// ---- validate ----\nconst errors = [];\nconst need = [\"callsign\", \"size\", \"activity\", \"unit\", \"equipment\"];\nneed.forEach(k => { if (!d || !String(d[k] || \"\").trim()) errors.push(k + \" is required\"); });\nconst lat = parseFloat(d && d.lat), lon = parseFloat(d && d.lon);\nif (!(lat >= -90 && lat <= 90)) errors.push(\"lat must be -90..90\");\nif (!(lon >= -180 && lon <= 180)) errors.push(\"lon must be -180..180\");\nconst affil = (d && d.affiliation) || \"a-u-G\";\nif (!/^a-[uhsnf]-G$/.test(affil)) errors.push(\"invalid affiliation\");\nif (errors.length) { node.warn(errors.join(\"; \")); return [null, respond(400, { ok: false, errors })]; }\n\n// ---- helpers ----\nconst esc = s => String(s).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\").replace(/'/g, \"&apos;\");\nconst uuid = () => \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0; return (c === \"x\" ? r : (r & 0x3 | 0x8)).toString(16); });\n\nconst mission = String(d.mission || env.get(\"DEFAULT_MISSION\") || \"\").trim();\nconst wantPkg = !!d.package && d.package !== \"false\";\nconst now = new Date();\nconst stale = new Date(now.getTime() + (parseInt(d.staleMinutes) || 60) * 60000);\nlet obs = d.time ? new Date(d.time) : now;\nif (isNaN(obs)) obs = now;\n\nconst uid = \"SALUTE-\" + uuid();\nconst callsign = \"SALUTE-\" + esc(String(d.callsign).trim());\n\nconst opt = k => String((d && d[k]) || \"\").trim();\nconst extra =\n    (opt(\"habits\") ? \"H (Habits): \" + opt(\"habits\") + \"\\n\" : \"\") +\n    (opt(\"intentions\") ? \"I (Intentions): \" + opt(\"intentions\") + \"\\n\" : \"\") +\n    (opt(\"morale\") ? \"M (Morale): \" + opt(\"morale\") + \"\\n\" : \"\");\nconst extraAttrs = [\"habits\", \"intentions\", \"morale\"]\n    .filter(k => opt(k)).map(k => \" \" + k + '=\"' + esc(opt(k)) + '\"').join(\"\");\n\nconst remarks =\n    \"SALUTE REPORT\\n\" +\n    \"S (Size): \" + d.size + \"\\n\" +\n    \"A (Activity): \" + d.activity + \"\\n\" +\n    \"L (Location): \" + lat.toFixed(6) + \", \" + lon.toFixed(6) + \"\\n\" +\n    \"U (Unit): \" + d.unit + \"\\n\" +\n    \"T (Time): \" + obs.toISOString() + \"\\n\" +\n    \"E (Equipment): \" + d.equipment + \"\\n\" +\n    extra +\n    \"Reported by: \" + d.callsign;\n\nconst xml =\n    '<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>' +\n    '<event version=\"2.0\" uid=\"' + uid + '\" type=\"' + affil + '\" how=\"h-e\"' +\n    ' time=\"' + now.toISOString() + '\" start=\"' + now.toISOString() + '\" stale=\"' + stale.toISOString() + '\">' +\n    '<point lat=\"' + lat + '\" lon=\"' + lon + '\" hae=\"9999999.0\" ce=\"9999999.0\" le=\"9999999.0\"/>' +\n    '<detail>' +\n    '<contact callsign=\"' + callsign + '\"/>' +\n    (mission ? '<marti><dest mission=\"' + esc(mission) + '\"/></marti>' : '') +\n    '<remarks source=\"' + esc(d.callsign) + '\">' + esc(remarks) + '</remarks>' +\n    '<salute size=\"' + esc(d.size) + '\" activity=\"' + esc(d.activity) + '\" unit=\"' + esc(d.unit) +\n        '\" time=\"' + obs.toISOString() + '\" equipment=\"' + esc(d.equipment) + '\"' + extraAttrs + '/>' +\n    '</detail></event>';\n\n// ---- keep history ----\nconst hist = global.get(\"salute_reports\") || [];\nhist.unshift({ uid, callsign: d.callsign, received: now.toISOString(), affiliation: affil,\n    size: d.size, activity: d.activity, lat, lon, unit: d.unit, time: obs.toISOString(), equipment: d.equipment,\n    habits: opt(\"habits\"), intentions: opt(\"intentions\"), morale: opt(\"morale\") });\nglobal.set(\"salute_reports\", hist.slice(0, 200));\n\nconst pkgName = callsign + \"_\" + obs.toISOString().replace(/[-:]/g, \"\").slice(0, 15) + \"Z\";\nconst out = { ok: true, uid, mission: mission || null };\nif (wantPkg) out.packageUrl = \"salute/package/\" + uid;\nreturn [\n    { payload: xml },\n    respond(200, out),\n    wantPkg ? { payload: xml, uid, mission, pkgName, callsign } : null\n];",
+    "outputs": 3,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 310,
+    "y": 240,
+    "wires": [
+      [
+        "tcp_tak",
+        "udp_mc",
+        "dbg_cot"
+      ],
+      [
+        "h_post_resp"
+      ],
+      [
+        "fn_pkg"
+      ]
+    ]
+  },
+  {
+    "id": "h_post_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "x": 520,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "tcp_tak",
+    "type": "tcp out",
+    "z": "salute_tab",
+    "host": "127.0.0.1",
+    "port": "8087",
+    "beserver": "client",
+    "base64": false,
+    "end": false,
+    "name": "TAK Server (TCP 8087)",
+    "x": 560,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "udp_mc",
+    "type": "udp out",
+    "z": "salute_tab",
+    "name": "ATAK mesh multicast (disabled)",
+    "addr": "239.2.3.1",
+    "iface": "",
+    "port": "6969",
+    "ipv": "udp4",
+    "outport": "",
+    "base64": false,
+    "multicast": "multi",
+    "d": true,
+    "x": 580,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "dbg_cot",
+    "type": "debug",
+    "z": "salute_tab",
+    "name": "CoT out",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 520,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "c3",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "3) Test without the form",
+    "info": "",
+    "x": 150,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "inj_test",
+    "type": "inject",
+    "z": "salute_tab",
+    "name": "Test SALUTE",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"callsign\":\"ALPHA1\",\"size\":\"4 personnel, 1 vehicle\",\"activity\":\"Moving north on foot, observing checkpoint\",\"lat\":38.8895,\"lon\":-77.0353,\"unit\":\"Unknown, dark clothing, no insignia\",\"equipment\":\"Small arms, 1 pickup truck\",\"affiliation\":\"a-u-G\",\"staleMinutes\":30}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 380,
+    "wires": [
+      [
+        "fn_build"
+      ]
+    ]
+  },
+  {
+    "id": "c4",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "4) Report history: GET /salute/reports",
+    "info": "",
+    "x": 200,
+    "y": 440,
+    "wires": []
+  },
+  {
+    "id": "h_list",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute/reports",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 480,
+    "wires": [
+      [
+        "fn_list"
+      ]
+    ]
+  },
+  {
+    "id": "fn_list",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Load history",
+    "func": "msg.payload = global.get(\"salute_reports\") || [];\nmsg.headers = {\"Content-Type\": \"application/json\"};\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 310,
+    "y": 480,
+    "wires": [
+      [
+        "h_list_resp"
+      ]
+    ]
+  },
+  {
+    "id": "h_list_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "200",
+    "headers": {},
+    "x": 480,
+    "y": 480,
+    "wires": []
+  },
+  {
+    "id": "fn_pkg",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Build data package",
+    "func": "// Build a Mission Package (data package) zip: MANIFEST/manifest.xml + <uid>/<uid>.cot\nconst crcT = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n;\n    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();\nconst crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 0xFF] ^ (c >>> 8);\n    return (c ^ 0xFFFFFFFF) >>> 0; };\n\nfunction zip(files) {                       // minimal \"stored\" zip writer, no dependencies\n    const d = new Date();\n    const dt = ((d.getFullYear() - 1980) << 9 | (d.getMonth() + 1) << 5 | d.getDate()) & 0xFFFF;\n    const tm = (d.getHours() << 11 | d.getMinutes() << 5 | (d.getSeconds() >> 1)) & 0xFFFF;\n    const parts = [], central = []; let off = 0;\n    for (const f of files) {\n        const name = Buffer.from(f.name), crc = crc32(f.data), sz = f.data.length;\n        const lh = Buffer.alloc(30);\n        lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(0, 8);\n        lh.writeUInt16LE(tm, 10); lh.writeUInt16LE(dt, 12); lh.writeUInt32LE(crc, 14);\n        lh.writeUInt32LE(sz, 18); lh.writeUInt32LE(sz, 22); lh.writeUInt16LE(name.length, 26);\n        parts.push(lh, name, f.data);\n        const ch = Buffer.alloc(46);\n        ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8);\n        ch.writeUInt16LE(tm, 12); ch.writeUInt16LE(dt, 14); ch.writeUInt32LE(crc, 16);\n        ch.writeUInt32LE(sz, 20); ch.writeUInt32LE(sz, 24); ch.writeUInt16LE(name.length, 28); ch.writeUInt32LE(off, 42);\n        central.push(ch, name);\n        off += 30 + name.length + sz;\n    }\n    const cd = Buffer.concat(central), e = Buffer.alloc(22);\n    e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(files.length, 8); e.writeUInt16LE(files.length, 10);\n    e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);\n    return Buffer.concat([...parts, cd, e]);\n}\nconst esc = s => String(s).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst uid = msg.uid;\nconst zipName = msg.pkgName + \".zip\";\nconst manifest =\n    '<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>' +\n    '<MissionPackageManifest version=\"2\"><Configuration>' +\n    '<Parameter name=\"uid\" value=\"' + esc(uid) + '\"/>' +\n    '<Parameter name=\"name\" value=\"' + esc(zipName) + '\"/>' +\n    '<Parameter name=\"onReceiveImport\" value=\"true\"/>' +\n    '<Parameter name=\"onReceiveDelete\" value=\"true\"/>' +\n    '</Configuration><Contents>' +\n    '<Content ignore=\"false\" zipEntry=\"' + esc(uid) + '/' + esc(uid) + '.cot\"/>' +\n    '</Contents></MissionPackageManifest>';\n\nconst buf = zip([\n    { name: \"MANIFEST/manifest.xml\", data: Buffer.from(manifest) },\n    { name: uid + \"/\" + uid + \".cot\", data: Buffer.from(msg.payload) }\n]);\n\n// keep the newest 25 packages for manual download\nconst pk = global.get(\"salute_packages\") || {};\nconst order = global.get(\"salute_package_order\") || [];\npk[uid] = { name: zipName, buf };\norder.push(uid);\nwhile (order.length > 25) delete pk[order.shift()];\nglobal.set(\"salute_packages\", pk);\nglobal.set(\"salute_package_order\", order);\n\n// push to TAK Server only when a mission and API base URL are known\nconst api = String(env.get(\"TAK_API\") || \"\").replace(/\\/+$/, \"\");\nif (!msg.mission || !api) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"package stored, no upload (mission/TAK_API unset)\" });\n    return [null, { payload: \"package \" + zipName + \" built, not uploaded\" }];\n}\nconst creator = env.get(\"CREATOR_UID\") || \"SALUTE-NODERED\";\nnode.status({ fill: \"green\", shape: \"dot\", text: \"uploading \" + zipName });\nreturn [{\n    method: \"POST\",\n    url: api + \"/Marti/sync/upload?name=\" + encodeURIComponent(zipName) +\n         \"&filename=\" + encodeURIComponent(zipName) + \"&creatorUid=\" + encodeURIComponent(creator),\n    headers: { \"Content-Type\": \"application/octet-stream\" },\n    payload: buf, mission: msg.mission, uid, zipName\n}, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 620,
+    "wires": [
+      [
+        "req_upload"
+      ],
+      [
+        "dbg_pkg"
+      ]
+    ]
+  },
+  {
+    "id": "req_upload",
+    "type": "http request",
+    "z": "salute_tab",
+    "name": "Upload package",
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "tls_tak",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 570,
+    "y": 600,
+    "wires": [
+      [
+        "fn_addm"
+      ]
+    ]
+  },
+  {
+    "id": "fn_addm",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Hash -> mission PUT",
+    "func": "// Take the content hash returned by the upload and attach it to the mission\nif (msg.statusCode !== 200) { node.error(\"Upload failed, HTTP \" + msg.statusCode + \": \" + msg.payload, msg); return null; }\nlet hash = String(msg.payload || \"\").trim();\ntry { const j = JSON.parse(hash); hash = j.Hash || j.hash || (j.data && (j.data.Hash || j.data.hash)) || hash; } catch (e) {}\nif (!/^[0-9a-fA-F]{64}$/.test(hash)) { node.error(\"Could not read content hash from upload response: \" + hash, msg); return null; }\n\nconst api = String(env.get(\"TAK_API\")).replace(/\\/+$/, \"\");\nconst creator = env.get(\"CREATOR_UID\") || \"SALUTE-NODERED\";\nreturn {\n    method: \"PUT\",\n    url: api + \"/Marti/api/missions/\" + encodeURIComponent(msg.mission) + \"/contents?creatorUid=\" + encodeURIComponent(creator),\n    headers: { \"Content-Type\": \"application/json\" },\n    payload: { hashes: [hash] },\n    mission: msg.mission, uid: msg.uid, zipName: msg.zipName\n};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 790,
+    "y": 600,
+    "wires": [
+      [
+        "req_mission"
+      ]
+    ]
+  },
+  {
+    "id": "req_mission",
+    "type": "http request",
+    "z": "salute_tab",
+    "name": "Add to mission",
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "tls_tak",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 990,
+    "y": 600,
+    "wires": [
+      [
+        "dbg_mission"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_mission",
+    "type": "debug",
+    "z": "salute_tab",
+    "name": "Mission result (statusCode)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "statusCode",
+    "targetType": "msg",
+    "x": 1230,
+    "y": 600,
+    "wires": []
+  },
+  {
+    "id": "dbg_pkg",
+    "type": "debug",
+    "z": "salute_tab",
+    "name": "Package info",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 570,
+    "y": 660,
+    "wires": []
+  },
+  {
+    "id": "c5",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "5) Data package: build zip, upload to TAK Server, attach to mission",
+    "info": "",
+    "x": 290,
+    "y": 560,
+    "wires": []
+  },
+  {
+    "id": "h_dl",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute/package/:uid",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 740,
+    "wires": [
+      [
+        "fn_dl"
+      ]
+    ]
+  },
+  {
+    "id": "fn_dl",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Load package",
+    "func": "const p = (global.get(\"salute_packages\") || {})[msg.req.params.uid];\nif (!p) { msg.statusCode = 404; msg.headers = { \"Content-Type\": \"text/plain\" }; msg.payload = \"Package not found (only the newest 25 are kept)\"; return msg; }\nmsg.statusCode = 200;\nmsg.headers = { \"Content-Type\": \"application/zip\", \"Content-Disposition\": 'attachment; filename=\"' + p.name + '\"' };\nmsg.payload = p.buf;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 320,
+    "y": 740,
+    "wires": [
+      [
+        "h_dl_resp"
+      ]
+    ]
+  },
+  {
+    "id": "h_dl_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 500,
+    "y": 740,
+    "wires": []
+  },
+  {
+    "id": "c6",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "6) Manual download: GET /salute/package/<uid> (import into ATAK Import Manager)",
+    "info": "",
+    "x": 300,
+    "y": 700,
+    "wires": []
+  },
+  {
+    "id": "c7",
+    "type": "comment",
+    "z": "salute_tab",
+    "name": "7) Form helpers: /salute/config (map settings) and /salute/missions (dropdown)",
+    "info": "",
+    "x": 300,
+    "y": 800,
+    "wires": []
+  },
+  {
+    "id": "h_cfg",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute/config",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 840,
+    "wires": [
+      [
+        "fn_cfg"
+      ]
+    ]
+  },
+  {
+    "id": "fn_cfg",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Map config",
+    "func": "// Map settings for the form (override with tab env vars)\nconst c = String(env.get(\"MAP_CENTER\") || \"39.5,-98.35\").split(\",\").map(Number);\nconst ok = c.length === 2 && c.every(Number.isFinite);\nreturn {\n    res: msg.res, _msgid: msg._msgid, statusCode: 200,\n    headers: { \"Content-Type\": \"application/json\", \"Cache-Control\": \"no-store\" },\n    payload: {\n        tileUrl: env.get(\"TILE_URL\") || \"https://tile.openstreetmap.org/{z}/{x}/{y}.png\",\n        attribution: env.get(\"TILE_ATTRIBUTION\") || \"&copy; OpenStreetMap contributors\",\n        lat: ok ? c[0] : 39.5, lon: ok ? c[1] : -98.35,\n        zoom: parseInt(env.get(\"MAP_ZOOM\")) || 4\n    }\n};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 310,
+    "y": 840,
+    "wires": [
+      [
+        "h_cfg_resp"
+      ]
+    ]
+  },
+  {
+    "id": "h_cfg_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 490,
+    "y": 840,
+    "wires": []
+  },
+  {
+    "id": "h_ml",
+    "type": "http in",
+    "z": "salute_tab",
+    "name": "",
+    "url": "/salute/missions",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 920,
+    "wires": [
+      [
+        "fn_mlist"
+      ]
+    ]
+  },
+  {
+    "id": "fn_mlist",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Cache / build request",
+    "func": "// Mission list for the form dropdown (cached 60 s; ?refresh=1 bypasses the cache)\nconst send = payload => ({ res: msg.res, _msgid: msg._msgid, statusCode: 200,\n    headers: { \"Content-Type\": \"application/json\", \"Cache-Control\": \"no-store\" }, payload });\nconst api = String(env.get(\"TAK_API\") || \"\").replace(/\\/+$/, \"\");\nif (!api) return [null, send({ ok: false, missions: [], error: \"TAK_API not set\" })];\n\nconst c = global.get(\"salute_missions_cache\");\nconst force = msg.req && msg.req.query && msg.req.query.refresh;\nif (c && !force && Date.now() - c.t < 60000) return [null, send({ ok: true, missions: c.list, cached: true })];\n\nreturn [{ res: msg.res, _msgid: msg._msgid, method: \"GET\", url: api + \"/Marti/api/missions\",\n          headers: { \"Accept\": \"application/json\" } }, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 920,
+    "wires": [
+      [
+        "req_missions"
+      ],
+      [
+        "h_ml_resp"
+      ]
+    ]
+  },
+  {
+    "id": "req_missions",
+    "type": "http request",
+    "z": "salute_tab",
+    "name": "GET missions",
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "tls_tak",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 560,
+    "y": 900,
+    "wires": [
+      [
+        "fn_mparse"
+      ]
+    ]
+  },
+  {
+    "id": "fn_mparse",
+    "type": "function",
+    "z": "salute_tab",
+    "name": "Parse mission names",
+    "func": "// Turn the TAK Server mission list into plain names for the form\nconst send = payload => ({ res: msg.res, _msgid: msg._msgid, statusCode: 200,\n    headers: { \"Content-Type\": \"application/json\", \"Cache-Control\": \"no-store\" }, payload });\n\nif (msg.error) { node.warn(\"Mission list: \" + (msg.error.message || msg.error)); return send({ ok: false, missions: [], error: \"could not reach TAK Server\" }); }\nif (msg.statusCode !== 200) { node.warn(\"Mission list HTTP \" + msg.statusCode); return send({ ok: false, missions: [], error: \"TAK Server returned HTTP \" + msg.statusCode }); }\n\nlet list = [];\ntry {\n    const j = typeof msg.payload === \"string\" ? JSON.parse(msg.payload) : msg.payload;\n    const arr = Array.isArray(j) ? j : (j.data || j.missions || []);\n    list = arr.map(m => typeof m === \"string\" ? m : (m && m.name))\n              .filter(n => typeof n === \"string\" && n)\n              .sort((a, b) => a.localeCompare(b));\n} catch (e) { return send({ ok: false, missions: [], error: \"unreadable response\" }); }\n\nglobal.set(\"salute_missions_cache\", { t: Date.now(), list });\nreturn send({ ok: true, missions: list });",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 790,
+    "y": 920,
+    "wires": [
+      [
+        "h_ml_resp"
+      ]
+    ]
+  },
+  {
+    "id": "catch_ml",
+    "type": "catch",
+    "z": "salute_tab",
+    "name": "",
+    "scope": [
+      "req_missions"
+    ],
+    "uncaught": false,
+    "x": 560,
+    "y": 960,
+    "wires": [
+      [
+        "fn_mparse"
+      ]
+    ]
+  },
+  {
+    "id": "h_ml_resp",
+    "type": "http response",
+    "z": "salute_tab",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 1000,
+    "y": 920,
+    "wires": []
+  },
+  {
+    "id": "tls_tak",
+    "type": "tls-config",
+    "name": "TAK client cert (PEM)",
+    "cert": "",
+    "key": "",
+    "ca": "",
+    "certname": "",
+    "keyname": "",
+    "caname": "",
+    "servername": "",
+    "verifyservercert": false
+  }
+]
